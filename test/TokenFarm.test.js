@@ -1,76 +1,115 @@
-import { assert } from 'chai';
-import helper from './helpers/helper';
+const { assert } = require('chai')
 
-const TokenFarm = artifacts.require("TokenFarm");
-const SanflowToken = artifacts.require("SanflowToken");
-const DaiToken = artifacts.require("DaiToken");
+const DaiToken = artifacts.require('DaiToken')
+const SanflowToken = artifacts.require('SanflowToken')
+const TokenFarm = artifacts.require('TokenFarm')
 
-require("chai")
-  .use(require("chai-as-promised"))
-  .should();
+require('chai')
+  .use(require('chai-as-promised'))
+  .should()
 
-contract("TokenFarm", ([owner, investor]) => {
+const tokens = (n) => {
+  return web3.utils.toWei(n, 'ether');
+}
+
+contract('TokenFarm', ([owner, investor]) => {
   let daiToken, sanflowToken, tokenFarm;
 
   before(async () => {
-    // Load smart contracts
-    daiToken = await DaiToken.new();
-    sanflowToken = await SanflowToken.new();
-    tokenFarm = await TokenFarm.new(sanflowToken.address, daiToken.address);
+    // Load Contracts
+    daiToken = await DaiToken.new()
+    sanflowToken = await SanflowToken.new()
+    tokenFarm = await TokenFarm.new(sanflowToken.address, daiToken.address)
 
-    // Transfer all Sanflow Tokens to farm (1 million)
-    await sanflowToken.transfer(tokenFarm.address, helper.tokens("1000000"));
+    // Transfer all Dapp tokens to farm (1 million)
+    await sanflowToken.transfer(tokenFarm.address, tokens('1000000'))
 
     // Send tokens to investor
-    await daiToken.transfer(investor, helper.tokens("100"), { from: owner });
-  });
+    await daiToken.transfer(investor, tokens('100'), { from: owner })
+  })
 
-  describe("Mock Dai deployment", async () => {
-    it("has a name", async () => {
-      const name = await daiToken.name();
-      assert.equal(name, "Mock DAI Token");
-    });
-  });
-
-  describe("Sanflow Token deployment", async () => {
-    it("has a name", async () => {
-      const name = await sanflowToken.name();
-      assert.equal(name, "SanflowToken");
-    });
-  });
-
-  describe("Token Farm deployment", async () => {
-    it("has a name", async () => {
-      const name = await tokenFarm.name();
-      assert.equal(name, "Token Farm");
-    });
-
-    it('contract has tokens', async () => {
-        const balance = await sanflowToken.balanceOf(tokenFarm.address);
-        assert.equal(balance.toString(), helper.tokens('1000000'))
-    })
-  });
-
-  describe('Staking Tokens', async () => {
-
-    it('rewards investors for staking Sanflow Tokens', async () => {
-
-        // Check investor balance before staking
-        let result = await daiToken.balanceOf(investor);
-        assert.equal(result.toString(), helper.tokens('100'), 'Investor Mock Dai Wallet balance correct before staking')
-
-        // Approve & Stake Mock DAI Tokens
-        await daiToken.approve(tokenFarm.address, helper.tokens('100'), { from: investor })
-        await tokenFarm.stakeTokens(helper.tokens('100'), { from: investor})
-
-         // Check investor wallet after staking
-        result = await daiToken.balanceOf(investor);
-        assert.equal(result.toString(), helper.tokens('0'), 'Investor Mock Dai wallet balance correct after staking')
-              
-         // Check investors wallet in the farm after staking
-         result = await tokenFarm.stakingBalance(investor)
-         assert.equal(result.toString(), helper.tokens('100'), 'Investor staking balance correct after staking')   
+  describe('Mock DAI deployment', async () => {
+    it('has a name', async () => {
+      const name = await daiToken.name()
+      assert.equal(name, 'Mock DAI Token')
     })
   })
 
-});
+  describe('Dapp Token deployment', async () => {
+    it('has a name', async () => {
+      const name = await sanflowToken.name()
+      assert.equal(name, 'SanflowToken')
+    })
+  })
+
+  describe('Token Farm deployment', async () => {
+    it('has a name', async () => {
+      const name = await tokenFarm.name()
+      assert.equal(name, 'Token Farm')
+    })
+
+    it('contract has tokens', async () => {
+      let balance = await sanflowToken.balanceOf(tokenFarm.address)
+      assert.equal(balance.toString(), tokens('1000000'))
+    })
+  })
+
+  describe('Farming tokens', async () => {
+
+    it('rewards investors for staking mDai tokens', async () => {
+      let result;
+
+      // Check investor balance before staking
+      result = await daiToken.balanceOf(investor)
+      assert.equal(result.toString(), tokens('100'), 'investor Mock DAI wallet balance correct before staking')
+
+      // Stake Mock DAI Tokens
+      await daiToken.approve(tokenFarm.address, tokens('100'), { from: investor })
+      await tokenFarm.stakeTokens(tokens('100'), { from: investor })
+
+
+      // Check staking result
+      result = await daiToken.balanceOf(investor)
+      assert.equal(result.toString(), tokens('0'), 'investor Mock DAI wallet balance correct after staking')
+
+      result = await daiToken.balanceOf(tokenFarm.address)
+      assert.equal(result.toString(), tokens('100'), 'Token Farm Mock DAI balance correct after staking')
+
+
+
+
+      result = await tokenFarm.stakingBalance(investor)
+      assert.equal(result.toString(), tokens('100'), 'investor staking balance correct after staking')
+
+      result = await tokenFarm.isStaking(investor)
+      assert.equal(result.toString(), 'true', 'investor staking status correct after staking')
+
+      // Issue Tokens
+      await tokenFarm.issue_SanflowTokens({ from: owner })
+
+      // Check balances after issuance
+      result = await sanflowToken.balanceOf(investor)
+      assert.equal(result.toString(), tokens('100'), 'investor DApp Token wallet balance correct affter issuance')
+
+      // Ensure that only owner can issue tokens
+      await tokenFarm.issue_SanflowTokens({ from: investor }).should.be.rejected;
+
+      // Unstake tokens
+      await tokenFarm.unstakeTokens({ from: investor })
+
+      // Check results after unstaking
+      result = await daiToken.balanceOf(investor)
+      assert.equal(result.toString(), tokens('100'), 'investor Mock DAI wallet balance correct after staking')
+
+      result = await daiToken.balanceOf(tokenFarm.address)
+      assert.equal(result.toString(), tokens('0'), 'Token Farm Mock DAI balance correct after staking')
+
+      result = await tokenFarm.stakingBalance(investor)
+      assert.equal(result.toString(), tokens('0'), 'investor staking balance correct after staking')
+
+      result = await tokenFarm.isStaking(investor)
+      assert.equal(result.toString(), 'false', 'investor staking status correct after staking')
+    })
+  })
+
+})
