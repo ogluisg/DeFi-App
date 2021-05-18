@@ -7,9 +7,6 @@ import SanflowToken from "../abis/SanflowToken.json";
 import TokenFarm from '../abis/TokenFarm.json'
 import Main from './Main';
 
-// https://www.youtube.com/watch?v=CgXQC4dbGUE&ab_channel=DappUniversity
-// 1:50:53
-
 const App = () => {
   const [state, setState] = useState({
     account: "0x0",
@@ -36,7 +33,6 @@ const App = () => {
 
   useEffect(() => {
     if (state.account !== '0x0') {
-      console.log(state.account)
       loadBlockChainData();
     }
   }, [state.account]);
